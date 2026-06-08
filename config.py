@@ -19,7 +19,7 @@ class Config:
     num_encoder_layers = 4
     dim_feedforward = 256
     dropout = 0.1
-    activation = "relu"
+    activation = "gelu"
 
     batch_size = 32
     num_epochs = 50

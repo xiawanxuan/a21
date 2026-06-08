@@ -15,13 +15,16 @@ from src.models import build_model, count_parameters
 class CombinedLoss(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.redshift_loss = nn.MSELoss()
-        self.classification_loss = nn.CrossEntropyLoss()
+        self.mse_loss = nn.MSELoss()
+        self.l1_loss = nn.L1Loss()
+        self.classification_loss = nn.CrossEntropyLoss(label_smoothing=0.1)
         self.redshift_weight = config.red_shift_loss_weight
         self.classification_weight = config.classification_loss_weight
 
     def forward(self, redshift_pred, redshift_true, class_pred, class_true):
-        r_loss = self.redshift_loss(redshift_pred, redshift_true)
+        mse = self.mse_loss(redshift_pred, redshift_true)
+        l1 = self.l1_loss(redshift_pred, redshift_true)
+        r_loss = 0.5 * mse + 0.5 * l1
         c_loss = self.classification_loss(class_pred, class_true.squeeze())
         total_loss = self.redshift_weight * r_loss + self.classification_weight * c_loss
         return total_loss, r_loss, c_loss

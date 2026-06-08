@@ -74,8 +74,9 @@ def test_data_processing():
 def test_models():
     print("Testing models module...")
     from src.models import (
-        PositionalEncoding,
-        SpectrumEmbedding,
+        LearnablePositionalEmbedding,
+        SinusoidalPositionalEncoding,
+        MultiScaleSpectrumEmbedding,
         TransformerEncoder,
         RedshiftRegressionHead,
         ClassificationHead,
