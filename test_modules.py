@@ -200,6 +200,68 @@ def test_prediction():
     print("  prediction test PASSED")
 
 
+def test_spectral_analysis():
+    print("Testing spectral_analysis module...")
+    from src.spectral_analysis import (
+        smooth_spectrum,
+        calculate_baseline,
+        detect_spectral_lines,
+        compute_spectral_features,
+        detect_anomalous_spectrum,
+        batch_detect_lines,
+        batch_detect_anomalies,
+    )
+
+    config = Config()
+    np.random.seed(42)
+
+    spectrum = np.random.randn(config.spectrum_length).astype(np.float32)
+
+    smoothed = smooth_spectrum(spectrum, window_size=5)
+    assert smoothed.shape == spectrum.shape
+
+    baseline = calculate_baseline(spectrum, poly_order=3)
+    assert baseline.shape == spectrum.shape
+
+    line_result = detect_spectral_lines(spectrum)
+    assert "emission_lines" in line_result
+    assert "absorption_lines" in line_result
+    assert "num_emission" in line_result
+    assert "num_absorption" in line_result
+    assert isinstance(line_result["emission_lines"], list)
+    assert isinstance(line_result["absorption_lines"], list)
+
+    features, line_result2 = compute_spectral_features(spectrum)
+    assert "mean_flux" in features
+    assert "std_flux" in features
+    assert "skewness" in features
+    assert "kurtosis" in features
+    assert "num_emission_lines" in features
+    assert "num_absorption_lines" in features
+
+    anomaly_result = detect_anomalous_spectrum(spectrum)
+    assert "is_anomalous" in anomaly_result
+    assert "anomaly_score" in anomaly_result
+    assert "reasons" in anomaly_result
+    assert isinstance(anomaly_result["is_anomalous"], bool)
+
+    num_samples = 20
+    spectra = np.random.randn(num_samples, config.spectrum_length).astype(np.float32)
+    spectra[0] = np.ones(config.spectrum_length) * 100.0
+
+    batch_line_results = batch_detect_lines(spectra)
+    assert len(batch_line_results) == num_samples
+    assert "emission_lines" in batch_line_results[0]
+
+    batch_anomaly_results, ref_stats = batch_detect_anomalies(spectra)
+    assert len(batch_anomaly_results) == num_samples
+    assert "is_anomalous" in batch_anomaly_results[0]
+    assert ref_stats is not None
+    assert "std_flux" in ref_stats
+
+    print("  spectral_analysis test PASSED")
+
+
 def main():
     print("=" * 60)
     print("Running module validation tests...")
@@ -247,6 +309,14 @@ def main():
         test_prediction()
     except Exception as e:
         print(f"  prediction test FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+    try:
+        test_spectral_analysis()
+    except Exception as e:
+        print(f"  spectral_analysis test FAILED: {e}")
         import traceback
         traceback.print_exc()
         return False

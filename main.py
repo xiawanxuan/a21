@@ -81,6 +81,31 @@ def main():
         "--output_dir", type=str, default=None, help="Output directory for plots"
     )
 
+    serve_parser = subparsers.add_parser("serve", help="Start API server")
+    serve_parser.add_argument(
+        "--checkpoint", type=str, default=None, help="Path to model checkpoint"
+    )
+    serve_parser.add_argument(
+        "--host", type=str, default="0.0.0.0", help="Host to bind"
+    )
+    serve_parser.add_argument(
+        "--port", type=int, default=8000, help="Port to bind"
+    )
+
+    analyze_parser = subparsers.add_parser("analyze", help="Analyze spectra (lines + anomaly detection)")
+    analyze_parser.add_argument(
+        "--input", type=str, required=True, help="Path to input spectra file (.npy or .npz)"
+    )
+    analyze_parser.add_argument(
+        "--output", type=str, default=None, help="Output file path"
+    )
+    analyze_parser.add_argument(
+        "--detect_lines", action="store_true", help="Detect spectral lines"
+    )
+    analyze_parser.add_argument(
+        "--detect_anomaly", action="store_true", help="Detect anomalous spectra"
+    )
+
     args = parser.parse_args()
 
     config = Config()
@@ -207,6 +232,65 @@ def main():
         output_dir = args.output_dir or config.output_dir
         print(f"Generating visualization plots to {output_dir}...")
         generate_all_plots(model, test_loader, config, output_dir=output_dir)
+
+    elif args.command == "serve":
+        from src.api_server import start_server
+
+        print("Starting API server...")
+        start_server(
+            config=config,
+            checkpoint_path=args.checkpoint,
+            host=args.host,
+            port=args.port,
+        )
+
+    elif args.command == "analyze":
+        from src.spectral_analysis import batch_detect_lines, batch_detect_anomalies
+
+        print(f"Loading input data from {args.input}...")
+        if args.input.endswith(".npy"):
+            spectra = np.load(args.input)
+        elif args.input.endswith(".npz"):
+            data = np.load(args.input)
+            spectra = data["spectra"]
+        else:
+            raise ValueError("Input file must be .npy or .npz format")
+
+        print(f"Analyzing {len(spectra)} spectra...")
+        results = {}
+
+        if args.detect_lines:
+            print("  Detecting spectral lines...")
+            line_results = batch_detect_lines(spectra)
+            results["spectral_lines"] = line_results
+
+        if args.detect_anomaly:
+            print("  Detecting anomalies...")
+            anomaly_results, ref_stats = batch_detect_anomalies(spectra)
+            results["anomalies"] = anomaly_results
+            results["reference_stats"] = ref_stats
+
+        if not (args.detect_lines or args.detect_anomaly):
+            print("No analysis option selected, running both...")
+            line_results = batch_detect_lines(spectra)
+            anomaly_results, ref_stats = batch_detect_anomalies(spectra)
+            results = {
+                "spectral_lines": line_results,
+                "anomalies": anomaly_results,
+                "reference_stats": ref_stats,
+            }
+
+        if args.output is None:
+            args.output = os.path.join(config.output_dir, "analysis_results.json")
+
+        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        with open(args.output, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"Analysis results saved to {args.output}")
+
+        if args.detect_anomaly:
+            anomaly_count = sum(1 for r in results.get("anomalies", []) if r["is_anomalous"])
+            print(f"  Anomalies detected: {anomaly_count}/{len(spectra)} ({anomaly_count/len(spectra)*100:.2f}%)")
 
     else:
         parser.print_help()
